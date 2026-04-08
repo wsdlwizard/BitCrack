@@ -83,7 +83,7 @@ __constant unsigned int _K7 = 0x50a28be6;
     c = rotl((c), 10)
 
 
-void ripemd160sha256(const unsigned int x[8], unsigned int digest[5])
+void ripemd160sha256(const unsigned int x[8], __private unsigned int digest[5])
 {
     unsigned int a1 = _RIPEMD160_IV[0];
     unsigned int b1 = _RIPEMD160_IV[1];
@@ -288,7 +288,7 @@ void ripemd160sha256(const unsigned int x[8], unsigned int digest[5])
 }
 
 
-void ripemd160sha256NoFinal(const unsigned int x[8], unsigned int digest[5])
+void ripemd160sha256NoFinal(const unsigned int x[8], __private unsigned int digest[5])
 {
     unsigned int a1 = _RIPEMD160_IV[0];
     unsigned int b1 = _RIPEMD160_IV[1];
