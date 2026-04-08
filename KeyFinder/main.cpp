@@ -20,7 +20,7 @@
 #include "CLKeySearchDevice.h"
 #endif
 
-typedef struct {
+struct RunConfig {
     // startKey is the first key. We store it so that if the --continue
     // option is used, the correct progress is displayed. startKey and
     // nextKey are only equal at the very beginning. nextKey gets saved
@@ -37,9 +37,9 @@ typedef struct {
     unsigned int threads = 0;
     unsigned int blocks = 0;
     unsigned int pointsPerThread = 0;
-    
+
     int compression = PointCompressionType::COMPRESSED;
- 
+
     std::vector<std::string> targets;
 
     std::string targetsFile = "";
@@ -55,7 +55,7 @@ typedef struct {
     secp256k1::uint256 stride = 1;
 
     bool follow = false;
-}RunConfig;
+};
 
 static RunConfig _config;
 
