@@ -15,7 +15,7 @@ typedef struct {
     unsigned int digest[5];
 }CLDeviceResult;
 
-bool isInList(unsigned int hash[5], __global unsigned int *targetList, size_t numTargets)
+bool isInList(__private unsigned int hash[5], __global unsigned int *targetList, size_t numTargets)
 {
     bool found = false;
 
@@ -36,7 +36,7 @@ bool isInList(unsigned int hash[5], __global unsigned int *targetList, size_t nu
     return found;
 }
 
-bool isInBloomFilter(unsigned int hash[5], __global unsigned int *targetList, ulong mask)
+bool isInBloomFilter(__private unsigned int hash[5], __global unsigned int *targetList, ulong mask)
 {
     bool foundMatch = true;
 
@@ -66,7 +66,7 @@ bool isInBloomFilter(unsigned int hash[5], __global unsigned int *targetList, ul
     return foundMatch;
 }
 
-bool checkHash(unsigned int hash[5], __global unsigned int *targetList, size_t numTargets, ulong mask)
+bool checkHash(__private unsigned int hash[5], __global unsigned int *targetList, size_t numTargets, ulong mask)
 {
     if(numTargets > 16) {
         return isInBloomFilter(hash, targetList, mask);
@@ -76,7 +76,7 @@ bool checkHash(unsigned int hash[5], __global unsigned int *targetList, size_t n
 }
 
 
-void doRMD160FinalRound(const unsigned int hIn[5], unsigned int hOut[5])
+void doRMD160FinalRound(__private const unsigned int hIn[5], __private unsigned int hOut[5])
 {
     const unsigned int iv[5] = {
         0x67452301,
@@ -163,7 +163,7 @@ __kernel void multiplyStepKernel(
 }
 
 
-void hashPublicKey(uint256_t x, uint256_t y, unsigned int* digestOut)
+void hashPublicKey(uint256_t x, uint256_t y, __private unsigned int* digestOut)
 {
     unsigned int hash[8];
 
@@ -177,7 +177,7 @@ void hashPublicKey(uint256_t x, uint256_t y, unsigned int* digestOut)
     ripemd160sha256NoFinal(hash, digestOut);
 }
 
-void hashPublicKeyCompressed(uint256_t x, unsigned int yParity, unsigned int* digestOut)
+void hashPublicKeyCompressed(uint256_t x, unsigned int yParity, __private unsigned int* digestOut)
 {
     unsigned int hash[8];
 
@@ -199,7 +199,7 @@ void atomicListAdd(__global CLDeviceResult *results, __global unsigned int *numR
     results[count] = *r;
 }
 
-void setResultFound(int idx, bool compressed, uint256_t x, uint256_t y, unsigned int digest[5], __global CLDeviceResult* results, __global unsigned int* numResults)
+void setResultFound(int idx, bool compressed, uint256_t x, uint256_t y, __private unsigned int digest[5], __global CLDeviceResult* results, __global unsigned int* numResults)
 {
     CLDeviceResult r;
 

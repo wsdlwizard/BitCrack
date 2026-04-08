@@ -41,7 +41,7 @@ __constant unsigned int _IV[8] = {
     (h) += (t) + MAJ((a), (b), (c)) + (rotr((a), 2) ^ rotr((a), 13) ^ rotr((a), 22))
 
 
-void sha256PublicKey(const unsigned int x[8], const unsigned int y[8], unsigned int digest[8])
+void sha256PublicKey(const unsigned int x[8], const unsigned int y[8], __private unsigned int digest[8])
 {
     unsigned int a, b, c, d, e, f, g, h;
     unsigned int w[16];
@@ -345,7 +345,7 @@ void sha256PublicKey(const unsigned int x[8], const unsigned int y[8], unsigned 
     digest[7] = tmp[7] + h;
 }
 
-void sha256PublicKeyCompressed(const unsigned int x[8], unsigned int yParity, unsigned int digest[8])
+void sha256PublicKeyCompressed(const unsigned int x[8], unsigned int yParity, __private unsigned int digest[8])
 {
     unsigned int a, b, c, d, e, f, g, h;
     unsigned int w[16];
