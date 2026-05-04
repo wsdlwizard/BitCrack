@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Check brainwallet found keys against your Bitcoin node for unspent funds.
-Uses scantxoutset to check the live UTXO set.
+Batches all addresses into a single scantxoutset call.
 
 Usage:
     python check_balances.py --found brainwallet_found.txt
@@ -20,7 +20,7 @@ RPC_PORT = 8332
 RPC_USER = "journalist_miner"
 RPC_PASS = "discovery1999"
 
-def rpc_call(method, params=None):
+def rpc_call(method, params=None, timeout=600):
     payload = json.dumps({
         "jsonrpc": "1.0",
         "id": "check",
@@ -36,23 +36,18 @@ def rpc_call(method, params=None):
     req.add_header("Authorization", f"Basic {credentials}")
     for attempt in range(4):
         try:
-            with urlopen(req, timeout=120) as resp:
+            with urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read().decode())
                 if result.get("error"):
                     raise Exception(f"RPC error: {result['error']}")
                 return result["result"]
         except URLError as e:
             if attempt < 3:
-                time.sleep(2 ** (attempt + 1))
+                wait = 2 ** (attempt + 1)
+                print(f"  Retry in {wait}s: {e}")
+                time.sleep(wait)
             else:
                 raise
-
-def check_address(addr):
-    """Check if an address has unspent outputs in the UTXO set."""
-    result = rpc_call("scantxoutset", ["start", [{"desc": f"addr({addr})"}]])
-    if result and result.get("total_amount", 0) > 0:
-        return result["total_amount"], result.get("unspents", [])
-    return 0, []
 
 def main():
     parser = argparse.ArgumentParser(description="Check brainwallet keys for unspent funds")
@@ -61,7 +56,7 @@ def main():
     args = parser.parse_args()
 
     print(f"Loading found keys from {args.found}...")
-    entries = []
+    entries = {}
     with open(args.found, 'r') as f:
         for line in f:
             line = line.strip()
@@ -72,39 +67,47 @@ def main():
                 privkey = parts[0]
                 address = parts[1]
                 phrase = " ".join(parts[2:])
-                entries.append((privkey, address, phrase))
+                entries[address] = (privkey, phrase)
 
-    print(f"  {len(entries)} keys to check")
+    print(f"  {len(entries)} unique addresses to check")
     print(f"  Connecting to Bitcoin node at {RPC_HOST}:{RPC_PORT}...")
+
+    # Build a single batch scan with all addresses
+    descriptors = [{"desc": f"addr({addr})"} for addr in entries.keys()]
+
+    print(f"  Scanning UTXO set for all {len(descriptors)} addresses in one call...")
+    print(f"  This may take 1-2 minutes, please wait...\n")
+
+    result = rpc_call("scantxoutset", ["start", descriptors], timeout=600)
+
+    total_amount = result.get("total_amount", 0)
+    unspents = result.get("unspents", [])
+    searched = result.get("txouts", 0)
+
+    print(f"  Scanned {searched:,} UTXOs")
     print()
 
-    funded = []
-    empty = 0
+    # Group unspents by address
+    funded = {}
+    for utxo in unspents:
+        addr = utxo.get("desc", "")
+        # Extract address from descriptor like "addr(1xxx...)#checksum"
+        if "addr(" in addr:
+            addr = addr.split("addr(")[1].split(")")[0]
+        else:
+            addr = utxo.get("scriptPubKey", {}).get("address", addr)
 
-    for i, (privkey, address, phrase) in enumerate(entries):
-        try:
-            amount, unspents = check_address(address)
-            if amount > 0:
-                btc_value = float(amount)
-                funded.append((privkey, address, phrase, btc_value, unspents))
-                print(f"  [{i+1}/{len(entries)}] *** FUNDED *** {address}")
-                print(f"             Balance: {btc_value} BTC")
-                print(f"             Phrase:  {phrase}")
-                print(f"             Key:     {privkey}")
-                print(f"             UTXOs:   {len(unspents)}")
-                print()
-            else:
-                empty += 1
-                print(f"  [{i+1}/{len(entries)}] Empty: {address} ({phrase})")
-        except Exception as e:
-            print(f"  [{i+1}/{len(entries)}] Error checking {address}: {e}")
+        if addr not in funded:
+            funded[addr] = {"amount": 0, "utxos": []}
+        funded[addr]["amount"] += float(utxo.get("amount", 0))
+        funded[addr]["utxos"].append(utxo)
 
-    print()
     print("=" * 60)
     print(f"RESULTS")
-    print(f"  Total checked: {len(entries)}")
-    print(f"  Empty:         {empty}")
-    print(f"  FUNDED:        {len(funded)}")
+    print(f"  Total addresses checked: {len(entries)}")
+    print(f"  Empty:                   {len(entries) - len(funded)}")
+    print(f"  FUNDED:                  {len(funded)}")
+    print(f"  Total BTC found:         {float(total_amount)}")
     print("=" * 60)
 
     if funded:
@@ -113,13 +116,21 @@ def main():
         print()
         total_btc = 0
         with open(args.output, 'w') as f:
-            for privkey, address, phrase, btc, unspents in funded:
+            for addr, info in sorted(funded.items(), key=lambda x: -x[1]["amount"]):
+                privkey, phrase = entries.get(addr, ("unknown", "unknown"))
+                btc = info["amount"]
                 total_btc += btc
-                print(f"  {address}: {btc} BTC (phrase: {phrase})")
-                f.write(f"{privkey} {address} {btc} BTC | {phrase}\n")
-                for u in unspents:
+                print(f"  {addr}")
+                print(f"    Balance: {btc:.8f} BTC")
+                print(f"    Phrase:  {phrase}")
+                print(f"    Key:     {privkey}")
+                print(f"    UTXOs:   {len(info['utxos'])}")
+                print()
+                f.write(f"{privkey} {addr} {btc:.8f} BTC | {phrase}\n")
+                for u in info["utxos"]:
                     f.write(f"  txid: {u.get('txid','')} vout: {u.get('vout','')} amount: {u.get('amount','')}\n")
-        print(f"\n  TOTAL: {total_btc} BTC")
+
+        print(f"  TOTAL: {total_btc:.8f} BTC")
         print(f"  Details saved to: {args.output}")
     else:
         print("\n  No funded wallets found. All addresses are empty.")
